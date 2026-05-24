@@ -1,0 +1,2 @@
+add_executable(imgproc_bench benchmark.cpp)
+target_link_libraries(imgproc_bench PRIVATE imgproc_lib)

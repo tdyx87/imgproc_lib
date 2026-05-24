@@ -1,0 +1,36 @@
+# Build output
+build/
+build2/
+
+# Conan generated
+CMakeUserPresets.json
+CMakePresets.json
+conanbuild.bat
+conanrun.bat
+deactivate_conanbuild.bat
+deactivate_conanrun.bat
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln
+*.vcxproj*
+
+# Compiled files
+*.obj
+*.lib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+
+# Test output
+output/
+test_output/
+
+# System files
+Thumbs.db
+.DS_Store

@@ -1,0 +1,15 @@
+[requires]
+libpng/1.6.40
+libjpeg-turbo/2.1.5
+zxing-cpp/2.1.0
+freetype/2.13.0
+lua/5.4.4
+zint/2.10.0
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[options]
+# 确保 zxing-cpp 使用 C++17
+zxing-cpp/*:compiler.cppstd=17
