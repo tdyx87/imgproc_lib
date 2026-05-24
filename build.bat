@@ -174,8 +174,32 @@ echo [OK] Dependencies installed
 echo [INFO] Configuring (Config=%CONFIG%, Arch=%ARCH%)...
 
 set "CMAKE_ARGS="
+set "USE_PRESET=0"
 
-:: 检查是否有 Conan preset
+:: 优先使用项目级 preset
+if not "%GENERATOR%"=="" (
+    goto :manual_config
+)
+
+if exist "%SCRIPT_DIR%CMakePresets.json" (
+    set "USE_PRESET=1"
+    if "%CROSS%"=="1" (
+        set "PRESET_NAME=windows-msvc-cross"
+    ) else if "%SHARED%"=="1" (
+        set "PRESET_NAME=windows-msvc-shared"
+    ) else (
+        set "PRESET_NAME=windows-msvc"
+    )
+    set "CMAKE_ARGS=--preset %PRESET_NAME%"
+    if "%NOTEST%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_TESTS=OFF"
+    if "%NOEXAMPLE%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_EXAMPLES=OFF"
+    if "%NOBENCH%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_BENCHMARKS=OFF"
+    if "%LUA%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_LUA_BINDINGS=ON"
+    if not "%TOOLSET%"=="" set "CMAKE_ARGS=%CMAKE_ARGS% -T %TOOLSET%"
+    goto :do_configure
+)
+
+:manual_config
 if exist "%BUILD_DIR%\CMakePresets.json" (
     set "CMAKE_ARGS=--preset conan-default -S "%SCRIPT_DIR%" -B "%BUILD_DIR%" -DCMAKE_BUILD_TYPE=%CONFIG% -DCMAKE_CXX_STANDARD=17"
     
@@ -187,7 +211,6 @@ if exist "%BUILD_DIR%\CMakePresets.json" (
     if "%CROSS%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DUSE_WINDOWS_API=OFF"
     if not "%TOOLSET%"=="" set "CMAKE_ARGS=%CMAKE_ARGS% -T %TOOLSET%"
 ) else (
-    :: 手动配置
     if not "%GENERATOR%"=="" (
         set "CMAKE_ARGS=-G "%GENERATOR%" -S "%SCRIPT_DIR%" -B "%BUILD_DIR%" -DCMAKE_TOOLCHAIN_FILE="%BUILD_DIR%\conan_toolchain.cmake" -DCMAKE_BUILD_TYPE=%CONFIG% -DCMAKE_CXX_STANDARD=17"
     ) else (
@@ -203,6 +226,7 @@ if exist "%BUILD_DIR%\CMakePresets.json" (
     if not "%TOOLSET%"=="" set "CMAKE_ARGS=%CMAKE_ARGS% -T %TOOLSET%"
 )
 
+:do_configure
 cmake %CMAKE_ARGS%
 if errorlevel 1 (
     echo [ERR] CMake configure failed

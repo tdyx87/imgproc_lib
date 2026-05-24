@@ -117,95 +117,91 @@ Write-Ok "Dependencies installed"
 
 Write-Info "Configuring (Config=$Config, Arch=$Arch)..."
 
-$cmakeArgs = @(
-    "-S", $ScriptDir,
-    "-B", $BuildDir,
-    "-DCMAKE_TOOLCHAIN_FILE=$BuildDir/conan_toolchain.cmake",
-    "-DCMAKE_BUILD_TYPE=$Config",
-    "-DCMAKE_CXX_STANDARD=17"
-)
+# Determine preset name based on platform and options
+$presetName = $null
+$usePreset = $false
 
-# Generator
-if ($Generator) {
-    $cmakeArgs += "-G", $Generator
-} else {
-    # Use Conan preset (handles generator automatically)
-    $presetPath = Join-Path $BuildDir "CMakePresets.json"
-    if (Test-Path $presetPath) {
-        $cmakeArgs = @(
-            "--preset", "conan-default",
-            "-S", $ScriptDir,
-            "-B", $BuildDir,
-            "-DCMAKE_BUILD_TYPE=$Config",
-            "-DCMAKE_CXX_STANDARD=17"
-        )
-        # Add options to preset-based args
-        if ($Shared) {
-            $cmakeArgs += "-DBUILD_SHARED_LIBS=ON"
-        }
-        if ($NoTest) {
-            $cmakeArgs += "-DBUILD_TESTS=OFF"
-        }
-        if ($NoExample) {
-            $cmakeArgs += "-DBUILD_EXAMPLES=OFF"
-        }
-        if ($NoBenchmark) {
-            $cmakeArgs += "-DBUILD_BENCHMARKS=OFF"
-        }
-        if ($Lua) {
-            $cmakeArgs += "-DBUILD_LUA_BINDINGS=ON"
-        }
+if (-not $Generator) {
+    if ($IsWindows -or ($env:OS -eq "Windows_NT")) {
         if ($CrossPlatform) {
-            $cmakeArgs += "-DUSE_WINDOWS_API=OFF"
+            $presetName = "windows-msvc-cross"
+        } elseif ($Shared) {
+            $presetName = "windows-msvc-shared"
+        } else {
+            $presetName = "windows-msvc"
         }
-        if ($Toolset) {
-            $cmakeArgs += "-T", $Toolset
+    } elseif ($IsLinux) {
+        if ($Shared) {
+            $presetName = "linux-gcc-shared"
+        } else {
+            $presetName = "linux-gcc"
         }
+    } elseif ($IsMacOS) {
+        if ($Shared) {
+            $presetName = "macos-clang-shared"
+        } else {
+            $presetName = "macos-clang"
+        }
+    }
+
+    # Check if project-level preset exists
+    $projectPresetPath = Join-Path $ScriptDir "CMakePresets.json"
+    if ($presetName -and (Test-Path $projectPresetPath)) {
         $usePreset = $true
     } else {
+        $presetName = $null
+    }
+}
+
+if ($usePreset) {
+    $cmakeArgs = @("--preset", $presetName)
+    # Preset inherits toolchain and build type; only add overrides
+    if ($NoTest)     { $cmakeArgs += "-DBUILD_TESTS=OFF" }
+    if ($NoExample)  { $cmakeArgs += "-DBUILD_EXAMPLES=OFF" }
+    if ($NoBenchmark){ $cmakeArgs += "-DBUILD_BENCHMARKS=OFF" }
+    if ($Lua)        { $cmakeArgs += "-DBUILD_LUA_BINDINGS=ON" }
+    if ($Toolset)    { $cmakeArgs += "-T", $Toolset }
+} else {
+    $cmakeArgs = @(
+        "-S", $ScriptDir,
+        "-B", $BuildDir,
+        "-DCMAKE_TOOLCHAIN_FILE=$BuildDir/conan_toolchain.cmake",
+        "-DCMAKE_BUILD_TYPE=$Config",
+        "-DCMAKE_CXX_STANDARD=17"
+    )
+
+    if ($Generator) {
+        $cmakeArgs += "-G", $Generator
+    } else {
         $hasVS = $false
-        if ($env:VisualStudioVersion) {
-            $hasVS = $true
-        }
+        if ($env:VisualStudioVersion) { $hasVS = $true }
         $clCmd = Get-Command "cl.exe" -ErrorAction SilentlyContinue
-        if ($clCmd) {
-            $hasVS = $true
-        }
+        if ($clCmd) { $hasVS = $true }
         if ($hasVS) {
             $cmakeArgs += "-G", "Visual Studio 17 2022"
             $cmakeArgs += "-A", $Arch
         }
     }
+
+    if ($Toolset)    { $cmakeArgs += "-T", $Toolset }
+    if ($Shared)     { $cmakeArgs += "-DBUILD_SHARED_LIBS=ON" }
+    if ($NoTest)     { $cmakeArgs += "-DBUILD_TESTS=OFF" }
+    if ($NoExample)  { $cmakeArgs += "-DBUILD_EXAMPLES=OFF" }
+    if ($NoBenchmark){ $cmakeArgs += "-DBUILD_BENCHMARKS=OFF" }
+    if ($Lua)        { $cmakeArgs += "-DBUILD_LUA_BINDINGS=ON" }
+    if ($CrossPlatform) { $cmakeArgs += "-DUSE_WINDOWS_API=OFF" }
 }
 
-# Toolset
-if ($Toolset) {
-    $cmakeArgs += "-T", $Toolset
+# Conan 2.x generates CMakeUserPresets.json that includes build/CMakePresets.json,
+# which can conflict with our project-level presets. Remove it.
+$conanUserPreset = Join-Path $ScriptDir "CMakeUserPresets.json"
+if (Test-Path $conanUserPreset) {
+    Remove-Item $conanUserPreset -Force
 }
 
-# Options (skip if preset already added them)
-if (-not $usePreset) {
-    if ($Shared) {
-        $cmakeArgs += "-DBUILD_SHARED_LIBS=ON"
-    }
-    if ($NoTest) {
-        $cmakeArgs += "-DBUILD_TESTS=OFF"
-    }
-    if ($NoExample) {
-        $cmakeArgs += "-DBUILD_EXAMPLES=OFF"
-    }
-    if ($NoBenchmark) {
-        $cmakeArgs += "-DBUILD_BENCHMARKS=OFF"
-    }
-    if ($Lua) {
-        $cmakeArgs += "-DBUILD_LUA_BINDINGS=ON"
-    }
-    if ($CrossPlatform) {
-        $cmakeArgs += "-DUSE_WINDOWS_API=OFF"
-    }
-}
-
+Push-Location $ScriptDir
 & cmake @cmakeArgs
+Pop-Location
 if ($LASTEXITCODE -ne 0) {
     Write-Err "CMake configure failed"
     exit 1

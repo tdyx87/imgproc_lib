@@ -4,7 +4,7 @@ build2/
 
 # Conan generated
 CMakeUserPresets.json
-CMakePresets.json
+build/CMakePresets.json
 conanbuild.bat
 conanrun.bat
 deactivate_conanbuild.bat
