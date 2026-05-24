@@ -851,42 +851,98 @@ bool CrossTextRenderer::renderToMemory(const TextRenderOptions& opts, ImageBuffe
     }
 
     // 测量文本
-    int maxWidth = 0;
-    // 从 FreeType 获取实际的行高和 ascender (基于 DPI 缩放)
     int lineHeight = static_cast<int>(face->size->metrics.height / 64.0);
     int ascender = static_cast<int>(face->size->metrics.ascender / 64.0);
     int descender = static_cast<int>(face->size->metrics.descender / 64.0);
     if (lineHeight <= 0) lineHeight = opts.fontSize;
     if (ascender <= 0) ascender = opts.fontSize;
+    if (opts.lineHeight > 0) lineHeight = opts.lineHeight;
 
-    int totalHeight = lineHeight;
-    int penX = 0;
-    int penY = 0;
-
-    for (size_t i = 0; i < opts.text.size(); ) {
-        if (opts.text[i] == '\n') {
-            penX = 0;
-            penY += lineHeight;
-            totalHeight = penY + lineHeight;
-            ++i;
-            continue;
+    // 将文本按 \n 分割为多行
+    std::vector<std::string> rawLines;
+    {
+        std::string current;
+        for (size_t i = 0; i < opts.text.size(); ++i) {
+            if (opts.text[i] == '\n') {
+                rawLines.push_back(current);
+                current.clear();
+            } else {
+                current += opts.text[i];
+            }
         }
-
-        uint32_t cp = 0;
-        int bytes = utf8Decode(opts.text, i, cp);
-        if (bytes == 0) break;
-
-        FT_UInt glyphIndex = FT_Get_Char_Index(face, static_cast<FT_ULong>(cp));
-        if (glyphIndex == 0) { i += bytes; continue; }
-
-        if (FT_Load_Glyph(face, glyphIndex, FT_LOAD_DEFAULT) != 0) { i += bytes; continue; }
-
-        penX += face->glyph->advance.x >> 6;
-        if (penX > maxWidth) maxWidth = penX;
-        i += bytes;
+        rawLines.push_back(current);
     }
 
-    out.width = (opts.width > 0) ? opts.width : maxWidth + 4;
+    // 测量单个 UTF-8 字符的宽度
+    auto measureCharWidth = [&](size_t pos) -> int {
+        uint32_t cp = 0;
+        utf8Decode(opts.text, pos, cp);
+        FT_UInt glyphIndex = FT_Get_Char_Index(face, static_cast<FT_ULong>(cp));
+        if (glyphIndex == 0) return 0;
+        if (FT_Load_Glyph(face, glyphIndex, FT_LOAD_DEFAULT) != 0) return 0;
+        return face->glyph->advance.x >> 6;
+    };
+
+    // 测量一行文本的宽度（按 UTF-8 字符遍历）
+    auto measureLine = [&](const std::string& line) -> int {
+        int w = 0;
+        for (size_t i = 0; i < line.size(); ) {
+            uint32_t cp = 0;
+            int bytes = utf8Decode(line, i, cp);
+            if (bytes == 0) break;
+            FT_UInt glyphIndex = FT_Get_Char_Index(face, static_cast<FT_ULong>(cp));
+            if (glyphIndex == 0) { i += bytes; continue; }
+            if (FT_Load_Glyph(face, glyphIndex, FT_LOAD_DEFAULT) != 0) { i += bytes; continue; }
+            w += face->glyph->advance.x >> 6;
+            i += bytes;
+        }
+        return w;
+    };
+
+    // 如果设置了 maxWidth，对每行进行自动换行
+    std::vector<std::string> lines;
+    if (opts.maxWidth > 0) {
+        for (const auto& rawLine : rawLines) {
+            if (rawLine.empty()) {
+                lines.push_back("");
+                continue;
+            }
+            std::string current;
+            int currentWidth = 0;
+            for (size_t i = 0; i < rawLine.size(); ) {
+                uint32_t cp = 0;
+                int bytes = utf8Decode(rawLine, i, cp);
+                if (bytes == 0) break;
+                FT_UInt glyphIndex = FT_Get_Char_Index(face, static_cast<FT_ULong>(cp));
+                int charWidth = 0;
+                if (glyphIndex != 0 && FT_Load_Glyph(face, glyphIndex, FT_LOAD_DEFAULT) == 0) {
+                    charWidth = face->glyph->advance.x >> 6;
+                }
+                if (currentWidth + charWidth > opts.maxWidth && !current.empty()) {
+                    lines.push_back(current);
+                    current.clear();
+                    currentWidth = 0;
+                }
+                current += rawLine.substr(i, bytes);
+                currentWidth += charWidth;
+                i += bytes;
+            }
+            lines.push_back(current);
+        }
+    } else {
+        lines = std::move(rawLines);
+    }
+
+    // 计算总尺寸
+    int maxLineWidth = 0;
+    for (const auto& line : lines) {
+        int lw = measureLine(line);
+        if (lw > maxLineWidth) maxLineWidth = lw;
+    }
+
+    int totalHeight = static_cast<int>(lines.size()) * lineHeight + 4;
+
+    out.width = (opts.width > 0) ? opts.width : maxLineWidth + 4;
     out.height = (opts.height > 0) ? opts.height : totalHeight + 4;
     out.format = PixelFormat::BGRA32;
     out.stride = out.width * 4;
@@ -912,59 +968,69 @@ bool CrossTextRenderer::renderToMemory(const TextRenderOptions& opts, ImageBuffe
     uint8_t fgG = (opts.fgColor >> 8) & 0xFF;
     uint8_t fgB = (opts.fgColor >> 16) & 0xFF;
 
-    penX = 2;
-    penY = ascender + 2; // 基线位置 = ascender + padding
+    int penY = ascender + 2;
 
-    for (size_t i = 0; i < opts.text.size(); ) {
-        if (opts.text[i] == '\n') {
-            penX = 2;
-            penY += lineHeight;
-            ++i;
-            continue;
+    for (const auto& line : lines) {
+        int lineW = measureLine(line);
+        int penX = 2;
+
+        // 对齐
+        if (opts.alignment == 1) {
+            // 居中
+            penX = (out.width - lineW) / 2;
+            if (penX < 2) penX = 2;
+        } else if (opts.alignment == 2) {
+            // 右对齐
+            penX = out.width - lineW - 2;
+            if (penX < 2) penX = 2;
         }
 
-        uint32_t cp = 0;
-        int bytes = utf8Decode(opts.text, i, cp);
-        if (bytes == 0) break;
+        for (size_t i = 0; i < line.size(); ) {
+            uint32_t cp = 0;
+            int bytes = utf8Decode(line, i, cp);
+            if (bytes == 0) break;
 
-        FT_UInt glyphIndex = FT_Get_Char_Index(face, static_cast<FT_ULong>(cp));
-        if (glyphIndex == 0) { i += bytes; continue; }
+            FT_UInt glyphIndex = FT_Get_Char_Index(face, static_cast<FT_ULong>(cp));
+            if (glyphIndex == 0) { i += bytes; continue; }
 
-        if (FT_Load_Glyph(face, glyphIndex, FT_LOAD_RENDER) != 0) { i += bytes; continue; }
+            if (FT_Load_Glyph(face, glyphIndex, FT_LOAD_RENDER) != 0) { i += bytes; continue; }
 
-        FT_Bitmap& bitmap = face->glyph->bitmap;
-        int drawX = penX + face->glyph->bitmap_left;
-        int drawY = penY - face->glyph->bitmap_top;
+            FT_Bitmap& bitmap = face->glyph->bitmap;
+            int drawX = penX + face->glyph->bitmap_left;
+            int drawY = penY - face->glyph->bitmap_top;
 
-        for (int row = 0; row < static_cast<int>(bitmap.rows); ++row) {
-            for (int col = 0; col < static_cast<int>(bitmap.width); ++col) {
-                int px = drawX + col;
-                int py = drawY + row;
+            for (int row = 0; row < static_cast<int>(bitmap.rows); ++row) {
+                for (int col = 0; col < static_cast<int>(bitmap.width); ++col) {
+                    int px = drawX + col;
+                    int py = drawY + row;
 
-                if (px < 0 || px >= out.width || py < 0 || py >= out.height) continue;
+                    if (px < 0 || px >= out.width || py < 0 || py >= out.height) continue;
 
-                uint8_t alpha = bitmap.buffer[row * bitmap.pitch + col];
-                if (alpha == 0) continue;
+                    uint8_t alpha = bitmap.buffer[row * bitmap.pitch + col];
+                    if (alpha == 0) continue;
 
-                size_t idx = (py * out.stride) + px * 4;
+                    size_t idx = (py * out.stride) + px * 4;
 
-                if (opts.antiAlias) {
-                    float a = alpha / 255.0f;
-                    out.data[idx] = static_cast<uint8_t>(bgB * (1 - a) + fgB * a);
-                    out.data[idx + 1] = static_cast<uint8_t>(bgG * (1 - a) + fgG * a);
-                    out.data[idx + 2] = static_cast<uint8_t>(bgR * (1 - a) + fgR * a);
-                } else {
-                    if (alpha > 127) {
-                        out.data[idx] = fgB;
-                        out.data[idx + 1] = fgG;
-                        out.data[idx + 2] = fgR;
+                    if (opts.antiAlias) {
+                        float a = alpha / 255.0f;
+                        out.data[idx] = static_cast<uint8_t>(bgB * (1 - a) + fgB * a);
+                        out.data[idx + 1] = static_cast<uint8_t>(bgG * (1 - a) + fgG * a);
+                        out.data[idx + 2] = static_cast<uint8_t>(bgR * (1 - a) + fgR * a);
+                    } else {
+                        if (alpha > 127) {
+                            out.data[idx] = fgB;
+                            out.data[idx + 1] = fgG;
+                            out.data[idx + 2] = fgR;
+                        }
                     }
                 }
             }
+
+            penX += face->glyph->advance.x >> 6;
+            i += bytes;
         }
 
-        penX += face->glyph->advance.x >> 6;
-        i += bytes;
+        penY += lineHeight;
     }
 
     FT_Done_Face(face);

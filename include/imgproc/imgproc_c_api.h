@@ -95,6 +95,9 @@ typedef struct {
     uint32_t fg_color;
     uint32_t bg_color;
     int anti_alias;
+    int line_height;
+    int max_width;
+    int alignment;  /* 0=left, 1=center, 2=right */
 } imgproc_text_options_t;
 
 /* ============================================================
@@ -235,6 +238,220 @@ IMGPROC_API int imgproc_text_render_file(const imgproc_text_options_t* opts, con
  * @brief Render text to image buffer
  */
 IMGPROC_API int imgproc_text_render_image(const imgproc_text_options_t* opts, imgproc_image_buffer_t* img);
+
+/* ============================================================
+ * Image transform
+ * ============================================================ */
+
+typedef enum {
+    IMGPROC_INTERP_NEAREST = 0,
+    IMGPROC_INTERP_BILINEAR,
+    IMGPROC_INTERP_BICUBIC
+} imgproc_interpolation_t;
+
+typedef enum {
+    IMGPROC_FLIP_HORIZONTAL = 0,
+    IMGPROC_FLIP_VERTICAL,
+    IMGPROC_FLIP_BOTH
+} imgproc_flip_mode_t;
+
+/**
+ * @brief Resize image
+ * @param src Source image
+ * @param dst Destination image (will be allocated)
+ * @param new_width Target width
+ * @param new_height Target height
+ * @param interp Interpolation method
+ * @return 0 on success, non-zero on error
+ */
+IMGPROC_API int imgproc_resize_image(const imgproc_image_buffer_t* src, imgproc_image_buffer_t* dst,
+                                      int new_width, int new_height, imgproc_interpolation_t interp);
+
+/**
+ * @brief Crop image
+ * @param src Source image
+ * @param dst Destination image (will be allocated)
+ * @param x Start X coordinate
+ * @param y Start Y coordinate
+ * @param w Crop width
+ * @param h Crop height
+ * @return 0 on success, non-zero on error
+ */
+IMGPROC_API int imgproc_crop_image(const imgproc_image_buffer_t* src, imgproc_image_buffer_t* dst,
+                                    int x, int y, int w, int h);
+
+/**
+ * @brief Rotate image
+ * @param src Source image
+ * @param dst Destination image (will be allocated)
+ * @param angle Rotation angle in degrees (counter-clockwise)
+ * @param expand Expand canvas to fit entire rotated image (1=yes, 0=no)
+ * @param interp Interpolation method
+ * @return 0 on success, non-zero on error
+ */
+IMGPROC_API int imgproc_rotate_image(const imgproc_image_buffer_t* src, imgproc_image_buffer_t* dst,
+                                      float angle, int expand, imgproc_interpolation_t interp);
+
+/**
+ * @brief Flip image
+ * @param src Source image
+ * @param dst Destination image (will be allocated)
+ * @param mode Flip mode (horizontal/vertical/both)
+ * @return 0 on success, non-zero on error
+ */
+IMGPROC_API int imgproc_flip_image(const imgproc_image_buffer_t* src, imgproc_image_buffer_t* dst,
+                                    imgproc_flip_mode_t mode);
+
+/* ============================================================
+ * Compression
+ * ============================================================ */
+
+typedef enum {
+    IMGPROC_COMPRESS_NONE = 0,
+    IMGPROC_COMPRESS_RLE,
+    IMGPROC_COMPRESS_DELTA_ROW,
+    IMGPROC_COMPRESS_JPEG
+} imgproc_compress_type_t;
+
+typedef struct {
+    imgproc_compress_type_t type;
+    uint8_t* data;
+    size_t data_size;
+    float ratio;
+    double elapsed_ms;
+} imgproc_compress_result_t;
+
+/**
+ * @brief Compress image data
+ * @param img Source image
+ * @param type Compression type
+ * @param result Output result (must be freed with imgproc_compress_result_free)
+ * @param jpeg_quality JPEG quality (1-100), only used for JPEG compression
+ * @return 0 on success, non-zero on error
+ */
+IMGPROC_API int imgproc_compress(const imgproc_image_buffer_t* img, imgproc_compress_type_t type,
+                                  imgproc_compress_result_t* result, int jpeg_quality);
+
+/**
+ * @brief Decompress image data
+ * @param compressed Compressed data
+ * @param compressed_size Compressed data size
+ * @param type Compression type (must match the type used for compression)
+ * @param width Original image width
+ * @param height Original image height
+ * @param format Original pixel format
+ * @param img Output image (will be allocated)
+ * @return 0 on success, non-zero on error
+ */
+IMGPROC_API int imgproc_decompress(const uint8_t* compressed, size_t compressed_size,
+                                    imgproc_compress_type_t type,
+                                    int width, int height, imgproc_pixel_format_t format,
+                                    imgproc_image_buffer_t* img);
+
+/**
+ * @brief Free compression result
+ */
+IMGPROC_API void imgproc_compress_result_free(imgproc_compress_result_t* result);
+
+/* ============================================================
+ * Barcode generation
+ * ============================================================ */
+
+typedef enum {
+    IMGPROC_BARCODE_UNKNOWN = 0,
+    IMGPROC_BARCODE_CODE128,
+    IMGPROC_BARCODE_CODE39,
+    IMGPROC_BARCODE_CODE93,
+    IMGPROC_BARCODE_EAN13,
+    IMGPROC_BARCODE_EAN8,
+    IMGPROC_BARCODE_UPCA,
+    IMGPROC_BARCODE_UPCE,
+    IMGPROC_BARCODE_ITF,
+    IMGPROC_BARCODE_CODABAR,
+    IMGPROC_BARCODE_QRCODE,
+    IMGPROC_BARCODE_DATAMATRIX,
+    IMGPROC_BARCODE_PDF417,
+    IMGPROC_BARCODE_AZTEC,
+    IMGPROC_BARCODE_MAXICODE
+} imgproc_barcode_type_t;
+
+typedef struct {
+    const char* text;
+    imgproc_barcode_type_t type;
+    int width;
+    int height;
+    int margin;
+    uint32_t fg_color;
+    uint32_t bg_color;
+    int show_text;
+    int font_size;
+} imgproc_barcode_options_t;
+
+/**
+ * @brief Generate barcode to file
+ * @param opts Barcode generation options
+ * @param path Output file path (format by extension: .bmp, .png, .jpg)
+ * @return 0 on success, non-zero on error
+ */
+IMGPROC_API int imgproc_barcode_generate_file(const imgproc_barcode_options_t* opts, const char* path);
+
+/**
+ * @brief Generate barcode to image buffer
+ * @param opts Barcode generation options
+ * @param img Output image buffer (must be freed with imgproc_image_free)
+ * @return 0 on success, non-zero on error
+ */
+IMGPROC_API int imgproc_barcode_generate_image(const imgproc_barcode_options_t* opts, imgproc_image_buffer_t* img);
+
+/**
+ * @brief Generate barcode to memory
+ * @param opts Barcode generation options
+ * @param format Output format
+ * @param out_data Receives pointer to allocated buffer (must be freed with free())
+ * @param out_size Receives buffer size
+ * @param jpeg_quality JPEG quality (1-100), ignored for other formats
+ * @return 0 on success, non-zero on error
+ */
+IMGPROC_API int imgproc_barcode_generate_memory(const imgproc_barcode_options_t* opts,
+                                                 imgproc_image_type_t format,
+                                                 uint8_t** out_data, size_t* out_size,
+                                                 int jpeg_quality);
+
+/* ============================================================
+ * Barcode reading
+ * ============================================================ */
+
+typedef struct {
+    int success;
+    char* text;
+    imgproc_barcode_type_t type;
+    const char* type_name;
+} imgproc_barcode_result_t;
+
+/**
+ * @brief Read barcode from image file
+ * @param path Image file path
+ * @param result Output result (must be freed with imgproc_barcode_result_free)
+ * @return 0 on success, non-zero on error
+ */
+IMGPROC_API int imgproc_barcode_read_file(const char* path, imgproc_barcode_result_t* result);
+
+/**
+ * @brief Read barcode from memory buffer
+ * @param data Image data
+ * @param size Image data size
+ * @param type Image type
+ * @param result Output result (must be freed with imgproc_barcode_result_free)
+ * @return 0 on success, non-zero on error
+ */
+IMGPROC_API int imgproc_barcode_read_memory(const uint8_t* data, size_t size,
+                                             imgproc_image_type_t type,
+                                             imgproc_barcode_result_t* result);
+
+/**
+ * @brief Free barcode result
+ */
+IMGPROC_API void imgproc_barcode_result_free(imgproc_barcode_result_t* result);
 
 /* ============================================================
  * Utility functions

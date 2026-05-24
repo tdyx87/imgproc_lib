@@ -1,0 +1,249 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # ============================================================
+  # Windows Build (MSVC)
+  # ============================================================
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64]
+        shared: [OFF, ON]
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Conan
+      run: |
+        pip install conan
+        conan profile detect --force
+
+    - name: Cache Conan packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.conan2
+        key: ${{ runner.os }}-conan-${{ hashFiles('**/conanfile.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-conan-
+
+    - name: Install dependencies
+      run: |
+        conan install . --output-folder=build --build=missing -s compiler.cppstd=17
+
+    - name: Configure CMake
+      run: |
+        cmake -B build -S . `
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+          -DBUILD_SHARED_LIBS=${{ matrix.shared }} `
+          -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake
+
+    - name: Build
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+    - name: Test
+      working-directory: build
+      run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-${{ matrix.arch }}-${{ matrix.shared == 'ON' && 'shared' || 'static' }}
+        path: |
+          build/${{ env.BUILD_TYPE }}/*.dll
+          build/${{ env.BUILD_TYPE }}/*.lib
+          build/${{ env.BUILD_TYPE }}/*.exe
+
+  # ============================================================
+  # Linux Build (GCC)
+  # ============================================================
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shared: [OFF, ON]
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Conan
+      run: |
+        pip install conan
+        conan profile detect --force
+
+    - name: Cache Conan packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.conan2
+        key: ${{ runner.os }}-conan-${{ hashFiles('**/conanfile.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-conan-
+
+    - name: Install dependencies
+      run: |
+        conan install . --output-folder=build --build=missing -s compiler.cppstd=17
+
+    - name: Configure CMake
+      run: |
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DBUILD_SHARED_LIBS=${{ matrix.shared }} \
+          -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake \
+          -G Ninja
+
+    - name: Build
+      run: cmake --build build --parallel
+
+    - name: Test
+      working-directory: build
+      run: ctest --output-on-failure
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-x64-${{ matrix.shared == 'ON' && 'shared' || 'static' }}
+        path: |
+          build/libimgproc_lib*
+          build/tests/test_*
+
+  # ============================================================
+  # macOS Build (Clang)
+  # ============================================================
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        shared: [OFF]
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install system dependencies
+      run: |
+        brew install cmake ninja
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Conan
+      run: |
+        pip install conan
+        conan profile detect --force
+
+    - name: Cache Conan packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.conan2
+        key: ${{ runner.os }}-conan-${{ hashFiles('**/conanfile.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-conan-
+
+    - name: Install dependencies
+      run: |
+        conan install . --output-folder=build --build=missing -s compiler.cppstd=17
+
+    - name: Configure CMake
+      run: |
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DBUILD_SHARED_LIBS=${{ matrix.shared }} \
+          -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake \
+          -G Ninja
+
+    - name: Build
+      run: cmake --build build --parallel
+
+    - name: Test
+      working-directory: build
+      run: ctest --output-on-failure
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-arm64-${{ matrix.shared == 'ON' && 'shared' || 'static' }}
+        path: |
+          build/libimgproc_lib*
+          build/tests/test_*
+
+  # ============================================================
+  # Code Quality (Static Analysis)
+  # ============================================================
+  code-quality:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-tidy cppcheck
+
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all --suppress=missingInclude \
+          --error-exitcode=1 \
+          -I include \
+          src/ 2>&1 | tee cppcheck-report.txt || true
+
+    - name: Upload cppcheck report
+      uses: actions/upload-artifact@v4
+      with:
+        name: cppcheck-report
+        path: cppcheck-report.txt
+
+  # ============================================================
+  # Documentation
+  # ============================================================
+  docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Generate API documentation
+      run: |
+        # 如果项目使用 Doxygen
+        if [ -f Doxyfile ]; then
+          sudo apt-get install -y doxygen graphviz
+          doxygen Doxyfile
+        fi
+
+    - name: Upload documentation
+      uses: actions/upload-artifact@v4
+      with:
+        name: documentation
+        path: docs/html

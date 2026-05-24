@@ -73,6 +73,9 @@ struct TextRenderOptions {
     uint32_t fgColor = 0x000000; // 前景色 (RGB)
     uint32_t bgColor = 0xFFFFFF; // 背景色
     bool antiAlias = true;
+    int lineHeight = 0;      // 行高 (像素, 0=自动, 使用字体的 1.2 倍)
+    int maxWidth = 0;        // 最大行宽 (像素, 0=不限制, 启用自动换行)
+    int alignment = 0;       // 对齐方式: 0=左对齐, 1=居中, 2=右对齐
 };
 
 // 接口基类

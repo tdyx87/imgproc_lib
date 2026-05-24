@@ -610,16 +610,13 @@ bool WinTextRenderer::renderToFile(const TextRenderOptions& opts, const std::str
 bool WinTextRenderer::renderToMemory(const TextRenderOptions& opts, ImageBuffer& out) {
     try {
         int dpi = (opts.dpi > 0) ? opts.dpi : 96;
-        // fontSize 视为基于 96 DPI 的设计像素大小
-        // 实际像素 = fontSize * dpi / 96
-        // 直接放大 fontSize 来实现 DPI 缩放
         float scale = static_cast<float>(dpi) / 96.0f;
         int scaledFontSize = static_cast<int>(opts.fontSize * scale + 0.5f);
         Gdiplus::REAL pointSize = static_cast<Gdiplus::REAL>(scaledFontSize) * 72.0f / 96.0f;
 
         // 优先使用黑体，如果不存在则回退到微软雅黑
         std::unique_ptr<Gdiplus::FontFamily> pFontFamily;
-        Gdiplus::FontFamily simhei(L"\u9ed1\u4f53"); // "黑体" Unicode
+        Gdiplus::FontFamily simhei(L"\u9ed1\u4f53");
         Gdiplus::FontFamily yahei(L"Microsoft YaHei");
 
         if (simhei.IsAvailable()) {
@@ -633,7 +630,7 @@ bool WinTextRenderer::renderToMemory(const TextRenderOptions& opts, ImageBuffer&
         Gdiplus::Font font(pFontFamily.get(), pointSize,
                           Gdiplus::FontStyleRegular, Gdiplus::UnitPoint);
 
-        // 测量文本大小
+        // 测量单行高度
         Gdiplus::Bitmap measureBmp(1, 1, PixelFormat32bppARGB);
         Gdiplus::Graphics measureG(&measureBmp);
         measureG.SetTextRenderingHint(opts.antiAlias
@@ -641,16 +638,75 @@ bool WinTextRenderer::renderToMemory(const TextRenderOptions& opts, ImageBuffer&
             : Gdiplus::TextRenderingHintSingleBitPerPixel);
         measureG.SetPageUnit(Gdiplus::UnitPixel);
 
-        Gdiplus::RectF bounds;
+        // 获取字体行高
+        int fontLineHeight = scaledFontSize;
+        if (opts.lineHeight > 0) {
+            fontLineHeight = static_cast<int>(opts.lineHeight * scale + 0.5f);
+        } else {
+            Gdiplus::RectF lineBounds;
+            measureG.MeasureString(L"Ay", 2, &font, Gdiplus::PointF(0, 0), &lineBounds);
+            fontLineHeight = static_cast<int>(lineBounds.Height) + 2;
+        }
+
+        // 将文本按 \n 分割为多行，并处理自动换行
         std::wstring wtext = toWideString(opts.text);
-        measureG.MeasureString(wtext.c_str(), -1, &font, Gdiplus::PointF(0, 0), &bounds);
+        std::vector<std::wstring> lines;
 
-        // MeasureString 返回设备像素
-        int textWidth = static_cast<int>(bounds.Width) + 4;
-        int textHeight = static_cast<int>(bounds.Height) + 4;
+        // 按 \n 分割
+        std::wstring currentLine;
+        for (size_t i = 0; i < wtext.size(); ++i) {
+            if (wtext[i] == L'\n') {
+                lines.push_back(currentLine);
+                currentLine.clear();
+            } else {
+                currentLine += wtext[i];
+            }
+        }
+        lines.push_back(currentLine);
 
-        out.width = (opts.width > 0) ? opts.width : textWidth;
-        out.height = (opts.height > 0) ? opts.height : textHeight;
+        // 如果设置了 maxWidth，对每行进行自动换行
+        if (opts.maxWidth > 0) {
+            std::vector<std::wstring> wrappedLines;
+            int maxW = static_cast<int>(opts.maxWidth * scale + 0.5f);
+
+            for (const auto& line : lines) {
+                if (line.empty()) {
+                    wrappedLines.push_back(L"");
+                    continue;
+                }
+
+                std::wstring current;
+                for (size_t i = 0; i < line.size(); ++i) {
+                    current += line[i];
+                    Gdiplus::RectF bounds;
+                    measureG.MeasureString(current.c_str(), -1, &font,
+                                            Gdiplus::PointF(0, 0), &bounds);
+                    if (bounds.Width > maxW && current.size() > 1) {
+                        // 回退一个字符
+                        current.pop_back();
+                        wrappedLines.push_back(current);
+                        current = line[i];
+                    }
+                }
+                wrappedLines.push_back(current);
+            }
+            lines = std::move(wrappedLines);
+        }
+
+        // 计算总尺寸
+        int maxLineWidth = 0;
+        for (const auto& line : lines) {
+            Gdiplus::RectF bounds;
+            measureG.MeasureString(line.c_str(), -1, &font,
+                                    Gdiplus::PointF(0, 0), &bounds);
+            int lw = static_cast<int>(bounds.Width) + 4;
+            if (lw > maxLineWidth) maxLineWidth = lw;
+        }
+
+        int totalHeight = static_cast<int>(lines.size()) * fontLineHeight + 4;
+
+        out.width = (opts.width > 0) ? opts.width : maxLineWidth;
+        out.height = (opts.height > 0) ? opts.height : totalHeight;
         out.format = imgproc::PixelFormat::BGRA32;
         out.stride = out.width * 4;
         out.data.resize(static_cast<size_t>(out.stride) * out.height, 0xFF);
@@ -677,8 +733,26 @@ bool WinTextRenderer::renderToMemory(const TextRenderOptions& opts, ImageBuffer&
             (opts.fgColor >> 8) & 0xFF,
             (opts.fgColor >> 16) & 0xFF));
 
-        g.DrawString(wtext.c_str(), -1, &font,
-                     Gdiplus::PointF(2, 2), &brush);
+        // 对齐方式
+        Gdiplus::StringFormat strFmt;
+        if (opts.alignment == 1) {
+            strFmt.SetAlignment(Gdiplus::StringAlignmentCenter);
+        } else if (opts.alignment == 2) {
+            strFmt.SetAlignment(Gdiplus::StringAlignmentFar);
+        }
+
+        Gdiplus::RectF layoutRect(2.0f, 2.0f,
+                                   static_cast<Gdiplus::REAL>(out.width - 4),
+                                   static_cast<Gdiplus::REAL>(out.height - 4));
+
+        // 构建完整文本（用 \n 连接）
+        std::wstring fullText;
+        for (size_t i = 0; i < lines.size(); ++i) {
+            if (i > 0) fullText += L'\n';
+            fullText += lines[i];
+        }
+
+        g.DrawString(fullText.c_str(), -1, &font, layoutRect, &strFmt, &brush);
 
         // 锁定位图获取渲染结果
         Gdiplus::Rect rect(0, 0, out.width, out.height);
