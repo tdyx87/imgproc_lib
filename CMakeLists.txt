@@ -169,14 +169,6 @@ if(USE_WINDOWS_API AND WIN32)
     )
 endif()
 
-# 生成导出头文件
-generate_export_header(imgproc_lib
-    BASE_NAME imgproc
-    EXPORT_MACRO_NAME IMGPROC_EXPORT
-    EXPORT_FILE_NAME ${CMAKE_CURRENT_BINARY_DIR}/include/imgproc/export.hpp
-)
-target_include_directories(imgproc_lib PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
-
 # ============================================================
 # 子目录
 # ============================================================

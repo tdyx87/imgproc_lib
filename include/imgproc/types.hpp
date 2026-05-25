@@ -4,6 +4,25 @@
 #include <memory>
 #include <string>
 
+// Dynamic library export/import macro
+#ifdef IMGPROC_BUILD_DLL
+    #ifdef _WIN32
+        #define IMGPROC_API __declspec(dllexport)
+    #else
+        #define IMGPROC_API __attribute__((visibility("default")))
+    #endif
+#else
+    #ifdef IMGPROC_USE_DLL
+        #ifdef _WIN32
+            #define IMGPROC_API __declspec(dllimport)
+        #else
+            #define IMGPROC_API __attribute__((visibility("default")))
+        #endif
+    #else
+        #define IMGPROC_API
+    #endif
+#endif
+
 namespace imgproc {
 
 enum class PixelFormat {
