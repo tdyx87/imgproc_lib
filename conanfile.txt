@@ -1,5 +1,5 @@
 [requires]
-libpng/1.6.40
+libpng/1.6.39
 libjpeg-turbo/2.1.5
 zxing-cpp/2.1.0
 freetype/2.13.0

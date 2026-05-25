@@ -1,5 +1,6 @@
 #include "imgproc/image_transform.hpp"
 #include <cmath>
+#include <cstring>
 #include <algorithm>
 
 #ifndef M_PI
