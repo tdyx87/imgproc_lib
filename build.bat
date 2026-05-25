@@ -1,19 +1,18 @@
 @echo off
-chcp 65001 >nul
 setlocal EnableDelayedExpansion
 
 :: ============================================================
-:: imgproc_lib 统一编译脚本 (Batch 版本)
+:: imgproc_lib Unified Build Script (Batch Version)
 :: ============================================================
 
-:: 默认配置
+:: Default configuration
 set "CONFIG=Release"
 set "ARCH=x64"
 set "GENERATOR="
 set "TOOLSET="
 set "PREFIX="
 
-:: 开关选项 (0=关闭, 1=开启)
+:: Options (0=off, 1=on)
 set "SHARED=0"
 set "NOTEST=0"
 set "NOEXAMPLE=0"
@@ -25,7 +24,7 @@ set "TEST=0"
 set "INSTALL=0"
 set "VERBOSE=0"
 
-:: 解析参数
+:: Parse arguments
 :parse_args
 if "%~1"=="" goto :main
 
@@ -117,7 +116,7 @@ echo [ERR] Unknown option: %~1
 goto :help
 
 :: ============================================================
-:: 主流程
+:: Main
 :: ============================================================
 :main
 set "SCRIPT_DIR=%~dp0"
@@ -129,7 +128,7 @@ echo   imgproc_lib Build Script
 echo ========================================
 echo.
 
-:: 检查工具
+:: Check tools
 where conan >nul 2>nul
 if errorlevel 1 (
     echo [ERR] Conan not found. Run: pip install conan
@@ -142,7 +141,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: 清理
+:: Clean
 if "%CLEAN%"=="1" (
     if exist "%BUILD_DIR%" (
         echo [INFO] Cleaning build directory...
@@ -151,7 +150,7 @@ if "%CLEAN%"=="1" (
 )
 
 :: ============================================================
-:: Step 1: Conan 安装依赖
+:: Step 1: Install dependencies via Conan
 :: ============================================================
 echo [INFO] Installing dependencies via Conan...
 
@@ -169,20 +168,14 @@ if errorlevel 1 (
 echo [OK] Dependencies installed
 
 :: ============================================================
-:: Step 2: CMake 配置
+:: Step 2: CMake configure
 :: ============================================================
 echo [INFO] Configuring (Config=%CONFIG%, Arch=%ARCH%)...
 
-set "CMAKE_ARGS="
-set "USE_PRESET=0"
-
-:: 优先使用项目级 preset
-if not "%GENERATOR%"=="" (
-    goto :manual_config
-)
+:: Use preset if available
+if not "%GENERATOR%"=="" goto :manual_config
 
 if exist "%SCRIPT_DIR%CMakePresets.json" (
-    set "USE_PRESET=1"
     if "%CROSS%"=="1" (
         set "PRESET_NAME=windows-msvc-cross"
     ) else if "%SHARED%"=="1" (
@@ -190,52 +183,45 @@ if exist "%SCRIPT_DIR%CMakePresets.json" (
     ) else (
         set "PRESET_NAME=windows-msvc"
     )
-    set "CMAKE_ARGS=--preset %PRESET_NAME%"
-    if "%NOTEST%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_TESTS=OFF"
-    if "%NOEXAMPLE%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_EXAMPLES=OFF"
-    if "%NOBENCH%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_BENCHMARKS=OFF"
-    if "%LUA%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_LUA_BINDINGS=ON"
-    if not "%TOOLSET%"=="" set "CMAKE_ARGS=%CMAKE_ARGS% -T %TOOLSET%"
-    goto :do_configure
+    
+    :: Build cmake command with arguments
+    set "CMAKE_CMD=cmake --preset !PRESET_NAME!"
+    if "%NOTEST%"=="1" set "CMAKE_CMD=!CMAKE_CMD! -DBUILD_TESTS=OFF"
+    if "%NOEXAMPLE%"=="1" set "CMAKE_CMD=!CMAKE_CMD! -DBUILD_EXAMPLES=OFF"
+    if "%NOBENCH%"=="1" set "CMAKE_CMD=!CMAKE_CMD! -DBUILD_BENCHMARKS=OFF"
+    if "%LUA%"=="1" set "CMAKE_CMD=!CMAKE_CMD! -DBUILD_LUA_BINDINGS=ON"
+    if not "%TOOLSET%"=="" set "CMAKE_CMD=!CMAKE_CMD! -T %TOOLSET%"
+    
+    echo [INFO] Running: !CMAKE_CMD!
+    !CMAKE_CMD!
+    if errorlevel 1 (
+        echo [ERR] CMake configure failed
+        exit /b 1
+    )
+    goto :configure_done
 )
 
 :manual_config
 if exist "%BUILD_DIR%\CMakePresets.json" (
-    set "CMAKE_ARGS=--preset conan-default -S "%SCRIPT_DIR%" -B "%BUILD_DIR%" -DCMAKE_BUILD_TYPE=%CONFIG% -DCMAKE_CXX_STANDARD=17"
-    
-    if "%SHARED%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_SHARED_LIBS=ON"
-    if "%NOTEST%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_TESTS=OFF"
-    if "%NOEXAMPLE%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_EXAMPLES=OFF"
-    if "%NOBENCH%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_BENCHMARKS=OFF"
-    if "%LUA%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_LUA_BINDINGS=ON"
-    if "%CROSS%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DUSE_WINDOWS_API=OFF"
-    if not "%TOOLSET%"=="" set "CMAKE_ARGS=%CMAKE_ARGS% -T %TOOLSET%"
+    cmake --preset conan-default -S "%SCRIPT_DIR%" -B "%BUILD_DIR%" -DCMAKE_BUILD_TYPE=%CONFIG% -DCMAKE_CXX_STANDARD=17%SHARED%%NOTEST%%NOEXAMPLE%%NOBENCH%%LUA%%CROSS%%TOOLSET%
 ) else (
     if not "%GENERATOR%"=="" (
-        set "CMAKE_ARGS=-G "%GENERATOR%" -S "%SCRIPT_DIR%" -B "%BUILD_DIR%" -DCMAKE_TOOLCHAIN_FILE="%BUILD_DIR%\conan_toolchain.cmake" -DCMAKE_BUILD_TYPE=%CONFIG% -DCMAKE_CXX_STANDARD=17"
+        cmake -G "%GENERATOR%" -S "%SCRIPT_DIR%" -B "%BUILD_DIR%" -DCMAKE_TOOLCHAIN_FILE="%BUILD_DIR%\conan_toolchain.cmake" -DCMAKE_BUILD_TYPE=%CONFIG% -DCMAKE_CXX_STANDARD=17%SHARED%%NOTEST%%NOEXAMPLE%%NOBENCH%%LUA%%CROSS%%TOOLSET%
     ) else (
-        set "CMAKE_ARGS=-G "Visual Studio 17 2022" -A %ARCH% -S "%SCRIPT_DIR%" -B "%BUILD_DIR%" -DCMAKE_TOOLCHAIN_FILE="%BUILD_DIR%\conan_toolchain.cmake" -DCMAKE_BUILD_TYPE=%CONFIG% -DCMAKE_CXX_STANDARD=17"
+        cmake -G "Visual Studio 17 2022" -A %ARCH% -S "%SCRIPT_DIR%" -B "%BUILD_DIR%" -DCMAKE_TOOLCHAIN_FILE="%BUILD_DIR%\conan_toolchain.cmake" -DCMAKE_BUILD_TYPE=%CONFIG% -DCMAKE_CXX_STANDARD=17%SHARED%%NOTEST%%NOEXAMPLE%%NOBENCH%%LUA%%CROSS%%TOOLSET%
     )
-    
-    if "%SHARED%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_SHARED_LIBS=ON"
-    if "%NOTEST%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_TESTS=OFF"
-    if "%NOEXAMPLE%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_EXAMPLES=OFF"
-    if "%NOBENCH%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_BENCHMARKS=OFF"
-    if "%LUA%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_LUA_BINDINGS=ON"
-    if "%CROSS%"=="1" set "CMAKE_ARGS=%CMAKE_ARGS% -DUSE_WINDOWS_API=OFF"
-    if not "%TOOLSET%"=="" set "CMAKE_ARGS=%CMAKE_ARGS% -T %TOOLSET%"
 )
 
-:do_configure
-cmake %CMAKE_ARGS%
 if errorlevel 1 (
     echo [ERR] CMake configure failed
     exit /b 1
 )
+
+:configure_done
 echo [OK] Configure complete
 
 :: ============================================================
-:: Step 3: 编译
+:: Step 3: Build
 :: ============================================================
 echo [INFO] Building (%CONFIG%)...
 
@@ -252,7 +238,7 @@ if errorlevel 1 (
 echo [OK] Build complete
 
 :: ============================================================
-:: Step 4: 运行测试
+:: Step 4: Run tests
 :: ============================================================
 if "%TEST%"=="1" (
     echo [INFO] Running tests...
@@ -260,8 +246,8 @@ if "%TEST%"=="1" (
     set "TEST_DIR=%BUILD_DIR%\tests\%CONFIG%"
     if not exist "!TEST_DIR!" set "TEST_DIR=%BUILD_DIR%\tests"
     
-    set "PASSED=0"
-    set "FAILED=0"
+    set /a PASSED=0
+    set /a FAILED=0
     
     for %%f in ("!TEST_DIR!\test_*.exe") do (
         set "TEST_NAME=%%~nf"
@@ -277,16 +263,16 @@ if "%TEST%"=="1" (
     )
     
     echo.
-    echo [INFO] Test results: %PASSED% passed, %FAILED% failed
+    echo [INFO] Test results: !PASSED! passed, !FAILED! failed
     
-    if %FAILED% gtr 0 (
+    if !FAILED! gtr 0 (
         echo [ERR] Some tests failed
         exit /b 1
     )
 )
 
 :: ============================================================
-:: Step 5: 安装
+:: Step 5: Install
 :: ============================================================
 if "%INSTALL%"=="1" (
     if "%PREFIX%"=="" (
@@ -306,7 +292,7 @@ if "%INSTALL%"=="1" (
 )
 
 :: ============================================================
-:: 汇总
+:: Summary
 :: ============================================================
 echo.
 echo ========================================
@@ -350,7 +336,7 @@ echo ========================================
 exit /b 0
 
 :: ============================================================
-:: 帮助信息
+:: Help
 :: ============================================================
 :help
 echo.
