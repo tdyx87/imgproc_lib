@@ -1,0 +1,149 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 21,
+        "patch": 0
+    },
+
+    "configurePresets": [
+        {
+            "name": "default",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_CXX_STANDARD": "17",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "conan-base",
+            "hidden": true,
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_POLICY_DEFAULT_CMP0091": "NEW"
+            }
+        },
+
+        {
+            "name": "windows-msvc",
+            "displayName": "Windows MSVC (x64)",
+            "description": "Visual Studio 2022, x64",
+            "inherits": "conan-base",
+            "generator": "Visual Studio 17 2022",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "toolchainFile": "build/conan_toolchain.cmake",
+            "binaryDir": "${sourceDir}/build"
+        },
+        {
+            "name": "windows-msvc-debug",
+            "displayName": "Windows MSVC Debug (x64)",
+            "inherits": "windows-msvc",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "windows-msvc-release",
+            "displayName": "Windows MSVC Release (x64)",
+            "inherits": "windows-msvc",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "windows-msvc-shared",
+            "displayName": "Windows MSVC Shared (x64)",
+            "inherits": "windows-msvc",
+            "cacheVariables": {
+                "BUILD_SHARED_LIBS": "ON"
+            }
+        },
+        {
+            "name": "windows-msvc-cross",
+            "displayName": "Windows MSVC Cross-platform",
+            "description": "Build without Windows API for portability",
+            "inherits": "windows-msvc",
+            "cacheVariables": {
+                "USE_WINDOWS_API": "OFF"
+            }
+        },
+        {
+            "name": "windows-ninja",
+            "displayName": "Windows Ninja (x64)",
+            "description": "Ninja generator on Windows (requires VS dev environment)",
+            "inherits": "conan-base",
+            "generator": "Ninja",
+            "toolchainFile": "build/conan_toolchain.cmake",
+            "binaryDir": "${sourceDir}/build"
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "CI Windows",
+            "inherits": "windows-msvc",
+            "cacheVariables": {
+                "BUILD_TESTS": "ON",
+                "BUILD_BENCHMARKS": "OFF",
+                "BUILD_EXAMPLES": "OFF"
+            }
+        }
+    ],
+
+    "buildPresets": [
+        {
+            "name": "windows-debug",
+            "configurePreset": "windows-msvc",
+            "configuration": "Debug",
+            "jobs": 12
+        },
+        {
+            "name": "windows-release",
+            "configurePreset": "windows-msvc",
+            "configuration": "Release",
+            "jobs": 12
+        },
+        {
+            "name": "ci-windows",
+            "configurePreset": "ci-windows",
+            "configuration": "Release",
+            "jobs": 12
+        }
+    ],
+
+    "testPresets": [
+        {
+            "name": "windows-debug",
+            "configurePreset": "windows-msvc",
+            "configuration": "Debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "windows-release",
+            "configurePreset": "windows-msvc",
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "ci-windows",
+            "configurePreset": "ci-windows",
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            }
+        }
+    ],
+
+    "packagePresets": [
+        {
+            "name": "windows-default",
+            "configurePreset": "windows-msvc"
+        }
+    ]
+}
