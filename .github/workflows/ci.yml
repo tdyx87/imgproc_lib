@@ -136,60 +136,6 @@ jobs:
           build/libimgproc_lib*
 
   # ============================================================
-  # macOS Build (Clang)
-  # ============================================================
-  build-macos:
-    runs-on: macos-13  # Use Intel runner for better compatibility
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install system dependencies
-      run: brew install ninja
-
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Install Conan
-      run: |
-        pip install conan
-        conan profile detect --force
-
-    - name: Cache Conan packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.conan2
-        key: ${{ runner.os }}-conan-${{ hashFiles('**/conanfile.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-conan-
-
-    - name: Install dependencies
-      run: conan install . --output-folder=build --build=missing -s compiler.cppstd=17
-
-    - name: Configure
-      run: |
-        cmake -S . -B build \
-          -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake \
-          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-          -DCMAKE_CXX_STANDARD=17 \
-          -G Ninja
-
-    - name: Build
-      run: cmake --build build --parallel
-
-    - name: Test
-      run: ctest --test-dir build --output-on-failure
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: macos-arm64-static
-        path: |
-          build/libimgproc_lib*
-
-  # ============================================================
   # Code Quality (Static Analysis)
   # ============================================================
   code-quality:

@@ -20,8 +20,6 @@ jobs:
             name: windows-x64
           - os: ubuntu-latest
             name: linux-x64
-          - os: macos-13  # Use Intel runner for better compatibility
-            name: macos-x64
 
     runs-on: ${{ matrix.os }}
 
@@ -42,10 +40,6 @@ jobs:
       if: runner.os == 'Linux'
       run: sudo apt-get update && sudo apt-get install -y ninja-build
 
-    - name: Install system dependencies (macOS)
-      if: runner.os == 'macOS'
-      run: brew install ninja
-
     - name: Cache Conan packages
       uses: actions/cache@v4
       with:
@@ -63,8 +57,8 @@ jobs:
         Remove-Item -Force CMakeUserPresets.json, build/CMakePresets.json -ErrorAction SilentlyContinue
         cmake --preset windows-msvc-shared
 
-    - name: Configure (Unix)
-      if: runner.os != 'Windows'
+    - name: Configure (Linux)
+      if: runner.os == 'Linux'
       run: |
         cmake -S . -B build \
           -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake \
@@ -86,8 +80,8 @@ jobs:
         cp README.md package/imgproc_lib/
         cd package && 7z a ../imgproc_lib-${{ matrix.name }}.zip imgproc_lib
 
-    - name: Package (Unix)
-      if: runner.os != 'Windows'
+    - name: Package (Linux)
+      if: runner.os == 'Linux'
       run: |
         mkdir -p package/imgproc_lib
         cp build/libimgproc_lib* package/imgproc_lib/
