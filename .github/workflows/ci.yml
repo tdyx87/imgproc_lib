@@ -139,7 +139,7 @@ jobs:
   # macOS Build (Clang)
   # ============================================================
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-13  # Use Intel runner for better compatibility
 
     steps:
     - uses: actions/checkout@v4

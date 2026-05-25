@@ -20,8 +20,8 @@ jobs:
             name: windows-x64
           - os: ubuntu-latest
             name: linux-x64
-          - os: macos-latest
-            name: macos-arm64
+          - os: macos-13  # Use Intel runner for better compatibility
+            name: macos-x64
 
     runs-on: ${{ matrix.os }}
 

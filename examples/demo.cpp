@@ -285,7 +285,8 @@ static void cmdInfo(int argc, char* argv[]) {
     }
 }
 
-// 将宽字符参数转换为 UTF-8
+#ifdef _WIN32
+// Convert wide char arguments to UTF-8 (Windows only)
 static std::vector<std::string> wargsToUtf8(int argc, wchar_t* wargv[]) {
     std::vector<std::string> args;
     for (int i = 0; i < argc; ++i) {
@@ -302,14 +303,20 @@ static std::vector<std::string> wargsToUtf8(int argc, wchar_t* wargv[]) {
 }
 
 int wmain(int argc, wchar_t* argv[]) {
-    // 将宽字符参数转换为 UTF-8
+    // Convert wide char arguments to UTF-8
     auto utf8Args = wargsToUtf8(argc, argv);
     std::vector<char*> utf8Argv;
     for (auto& a : utf8Args) {
         utf8Argv.push_back(const_cast<char*>(a.c_str()));
     }
     argc = static_cast<int>(utf8Argv.size());
-    argv = nullptr; // 不再使用原始 wargv
+#else
+int main(int argc, char* argv[]) {
+    std::vector<char*> utf8Argv;
+    for (int i = 0; i < argc; ++i) {
+        utf8Argv.push_back(argv[i]);
+    }
+#endif
 
     if (argc < 2) {
         printUsage(utf8Argv[0]);

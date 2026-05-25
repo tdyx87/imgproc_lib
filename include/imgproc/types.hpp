@@ -165,15 +165,15 @@ public:
                            std::vector<uint8_t>& out, int& width, int& height, PixelFormat& format) = 0;
 };
 
-// 工厂函数
-std::unique_ptr<IImageCodec> createWinCodec();
-std::unique_ptr<IImageCodec> createCrossCodec();
-std::unique_ptr<IQRCodeReader> createQRCodeReader();
-std::unique_ptr<IQRCodeGenerator> createQRCodeGenerator();
-std::unique_ptr<ITextRenderer> createWinTextRenderer();
-std::unique_ptr<ITextRenderer> createCrossTextRenderer();
-std::unique_ptr<ICompression> createRLECompression();
-std::unique_ptr<ICompression> createDeltaRowCompression();
-std::unique_ptr<ICompression> createJPEGCompression(int quality = 75);
+// Factory functions
+IMGPROC_API std::unique_ptr<IImageCodec> createWinCodec();
+IMGPROC_API std::unique_ptr<IImageCodec> createCrossCodec();
+IMGPROC_API std::unique_ptr<IQRCodeReader> createQRCodeReader();
+IMGPROC_API std::unique_ptr<IQRCodeGenerator> createQRCodeGenerator();
+IMGPROC_API std::unique_ptr<ITextRenderer> createWinTextRenderer();
+IMGPROC_API std::unique_ptr<ITextRenderer> createCrossTextRenderer();
+IMGPROC_API std::unique_ptr<ICompression> createRLECompression();
+IMGPROC_API std::unique_ptr<ICompression> createDeltaRowCompression();
+IMGPROC_API std::unique_ptr<ICompression> createJPEGCompression(int quality = 75);
 
 } // namespace imgproc
