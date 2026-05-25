@@ -11,6 +11,26 @@ option(BUILD_EXAMPLES "Build example executables" ON)
 option(USE_WINDOWS_API "Enable Windows API implementation" ON)
 
 # ============================================================
+# Platform detection
+# ============================================================
+# HarmonyOS / OHOS detection
+if(NOT DEFINED OHOS)
+    # Check for HarmonyOS NDK toolchain indicators
+    if(DEFINED ENV{OHOS_NDK_HOME} OR CMAKE_SYSTEM_NAME MATCHES "OHOS")
+        set(OHOS TRUE)
+        message(STATUS "Detected HarmonyOS/OHOS platform")
+    endif()
+endif()
+
+# On non-Windows platforms (Linux, macOS, HarmonyOS), disable Windows API
+if(OHOS OR (NOT WIN32 AND NOT CYGWIN))
+    set(USE_WINDOWS_API OFF CACHE BOOL "Windows API disabled on non-Windows platform" FORCE)
+    if(OHOS)
+        add_definitions(-DOHOS)
+    endif()
+endif()
+
+# ============================================================
 # C++ 标准
 # ============================================================
 set(CMAKE_CXX_STANDARD 17)

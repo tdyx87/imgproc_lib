@@ -1,282 +1,349 @@
-# imgproc_lib - C++ 图像处理库
+# imgproc_lib - C++ Image Processing Library
 
-一个功能完整的 C++ 图像处理库，支持格式转换、二维码读取、文本渲染和多种压缩算法，提供 Windows API 和跨平台两套实现方案。
+A full-featured C++17 image processing library with format conversion, QR/barcode generation & reading, text rendering, and compression algorithms. Supports Windows, Linux, and HarmonyOS.
 
-## 功能特性
+## Features
 
-### 1. 图像格式转换 (PNG/BMP/JPEG → JPEG)
-- 支持 PNG、BMP、JPEG 格式读取
-- 输出 JPEG 格式（可调质量 1-100）
-- 同时支持**文件路径**和**内存缓冲区**操作
-- 自动检测图像类型（通过文件头魔数）
+- **Image Codec**: PNG/BMP/JPEG read/write, auto-detection by magic bytes
+- **QR Code**: Generate and read QR codes, support for logo overlay
+- **Barcode**: Generate and read 14 barcode formats (Code128, EAN-13, UPC-A, etc.)
+- **Text Rendering**: Multi-language text to image (CJK support)
+- **Compression**: RLE, DeltaRow, JPEG with quality control
+- **Image Transform**: Resize, crop, rotate, flip
+- **Dual Implementation**: Windows API (GDI+) and cross-platform (libjpeg-turbo/libpng/FreeType)
+- **C API**: Complete C FFI interface for NDK/FFI integration
 
-### 2. 二维码读取 (QR Code)
-- 基于 ZXing-C++ 的二维码解码
-- 输出标准 BMP 1-bit 格式的二维码位图
-- 支持从文件或内存读取
-- 支持多二维码识别
-
-### 3. 文本转图片
-- 支持三种输出格式：**1-bit BMP**、**RGB**、**JPEG**
-- 支持自定义字体、字号、前景色、背景色
-- 支持抗锯齿渲染
-- 支持中文等多语言文本
-
-### 4. 压缩算法
-| 算法 | 类型 | 适用场景 |
-|------|------|----------|
-| **RLE** | 无损 | 大面积相同色块、简单图形、1-bit 图像 |
-| **DeltaRow** | 无损 | 相邻行相似的图像（渐变、扫描文档、截图） |
-| **JPEG** | 有损 | 照片、复杂图像，支持 q=1~100 质量调节 |
-
-### 5. 双实现方案
-
-| 特性 | Windows API (GDI+) | 跨平台 (libjpeg-turbo/libpng/FreeType) |
-|------|-------------------|----------------------------------------|
-| 平台支持 | 仅 Windows | 全平台 |
-| XP 兼容 | 是 (GDI+ 1.0) | 是 |
-| JPEG 编解码速度 | 中等 | 快 (libjpeg-turbo SIMD 优化) |
-| PNG 支持 | 有限 | 完整 |
-| BMP 1-bit | 支持 | 完整 |
-| 文本渲染 | 好 (系统字体) | 好 (需字体文件) |
-| CJK 支持 | 原生 | 需提供字体文件 |
-| 二进制体积 | 小 (系统 DLL) | 较大 (~2-5MB 静态链接) |
-| 依赖 | Windows SDK | libpng, libjpeg-turbo, freetype |
-
-## 项目结构
+## Project Structure
 
 ```
 imgproc_lib/
-├── CMakeLists.txt              # 主构建文件 (VS2017 + XP 支持)
-├── conanfile.txt               # Conan 依赖管理
-├── cmake/
-│   └── imgproc_config.cmake.in # CMake 包配置模板
-├── include/imgproc/
-│   ├── imgproc.hpp             # 总头文件
-│   ├── types.hpp               # 核心类型定义
-│   ├── image_codec.hpp         # 格式转换接口
-│   ├── qrcode_reader.hpp       # 二维码读取接口
-│   ├── text_renderer.hpp       # 文本渲染接口
-│   ├── compression.hpp         # 压缩接口
+├── CMakeLists.txt              # Main build file
+├── CMakePresets.json           # CMake presets (Windows)
+├── conanfile.txt               # Conan dependencies (simple)
+├── conanfile.py                # Conan recipe (OHOS cross-compile)
+├── profiles/
+│   └── ohos-arm64              # Conan OHOS profile
+├── build.ps1                   # PowerShell build script
+├── build.bat                   # Batch build script
+├── include/imgproc/            # Public headers
+├── src/                        # Source code
 │   └── platform/
-│       ├── win_codec.hpp       # Windows API 实现
-│       └── cross_codec.hpp     # 跨平台实现
-├── src/
-│   ├── image_codec.cpp         # 格式转换实现
-│   ├── qrcode_reader.cpp       # 二维码读取实现
-│   ├── text_renderer.cpp       # 文本渲染实现
-│   ├── compression.cpp         # 压缩算法实现
-│   └── platform/
-│       ├── win_codec.cpp       # GDI+ 实现
-│       └── cross_codec.cpp     # 跨平台实现
-├── bench/
-│   ├── CMakeLists.txt
-│   └── benchmark.cpp           # 综合基准测试
-├── tests/
-│   ├── CMakeLists.txt
-│   ├── test_image_codec.cpp    # 编解码测试
-│   ├── test_qrcode.cpp         # 二维码测试
-│   ├── test_text_renderer.cpp  # 文本渲染测试
-│   └── test_compression.cpp    # 压缩算法测试
-└── examples/
-    ├── CMakeLists.txt
-    └── demo.cpp                # 命令行示例工具
+│       ├── win_codec.cpp       # Windows GDI+ implementation
+│       └── cross_codec.cpp     # Cross-platform implementation
+├── tests/                      # Unit tests
+├── bench/                      # Benchmarks
+├── examples/                   # Demo CLI tool
+└── third_party/qrcodegen/      # QR code generator (nanoproject)
 ```
 
-## 构建说明
+---
 
-### 前置条件
+## Build Environment Setup
 
-- CMake >= 3.15
-- Visual Studio 2017 (v141 工具集)
-- Conan 包管理器
-- (可选) v141_xp 工具集用于 XP 支持
+### Prerequisites (All Platforms)
 
-### 使用 Conan 安装依赖
+| Tool | Minimum Version | Install |
+|------|----------------|---------|
+| **CMake** | >= 3.15 | [cmake.org](https://cmake.org/download/) |
+| **Conan 2.x** | >= 2.0 | `pip install conan` |
+| **C++ Compiler** | C++17 support | Platform-specific (see below) |
+
+### Step 1: Install Conan
 
 ```bash
-cd imgproc_lib
-conan install . --build=missing -s build_type=Release
+pip install conan
+conan profile detect --force
 ```
 
-### 构建步骤
+Verify:
+```bash
+conan --version    # Should be 2.x
+```
+
+---
+
+## Windows Build
+
+### Prerequisites
+
+- **Visual Studio 2022** (includes MSVC v143 toolset)
+- **Windows SDK** (comes with VS2022)
+- **Ninja** (optional, for faster builds)
+
+### Quick Build (Recommended)
+
+```powershell
+# Default: Release + static lib + tests + examples
+.\build.ps1
+
+# Clean rebuild + run tests
+.\build.ps1 -Clean -Test
+
+# Debug build
+.\build.ps1 -Config Debug
+
+# Build shared library (DLL)
+.\build.ps1 -Shared
+
+# Library only (no tests/examples/benchmarks)
+.\build.ps1 -NoTest -NoExample -NoBenchmark
+
+# Verbose output
+.\build.ps1 -Verbose
+```
+
+### Build Options (build.ps1)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `-Config` | Release | Build configuration: Release, Debug, RelWithDebInfo, MinSizeRel |
+| `-Shared` | OFF | Build shared library (DLL) |
+| `-NoTest` | OFF | Skip building tests |
+| `-NoExample` | OFF | Skip building examples |
+| `-NoBenchmark` | OFF | Skip building benchmarks |
+| `-CrossPlatform` | OFF | Disable Windows API, use cross-platform impl only |
+| `-Clean` | OFF | Clean build directory before building |
+| `-Test` | OFF | Run tests after build |
+| `-Install` | OFF | Install to directory |
+| `-Prefix <path>` | build/install | Install prefix |
+| `-Verbose` | OFF | Verbose output |
+
+### Manual CMake Build
+
+```powershell
+# 1. Install dependencies
+conan install . --output-folder=build --build=missing -s compiler.cppstd=17
+
+# 2. Remove Conan-generated preset (avoids conflict with project preset)
+Remove-Item -Force CMakeUserPresets.json, build/CMakePresets.json -ErrorAction SilentlyContinue
+
+# 3. Configure
+cmake --preset windows-msvc
+
+# 4. Build
+cmake --build build --config Release --parallel
+
+# 5. Test
+ctest --preset windows-release --output-on-failure
+```
+
+### CMake Presets (Windows)
+
+```
+windows-msvc           # Default: VS2022, x64, static
+windows-msvc-debug     # Debug configuration
+windows-msvc-release   # Release configuration
+windows-msvc-shared    # Shared library (DLL)
+windows-msvc-cross     # Cross-platform only (no Windows API)
+windows-ninja          # Ninja generator (faster builds)
+ci-windows             # CI optimized (tests ON, examples OFF)
+```
+
+### Build with Visual Studio
+
+Open `build/imgproc_lib.sln` in Visual Studio and build from IDE.
+
+---
+
+## Linux Build
+
+### Prerequisites
 
 ```bash
-# 配置 (VS2017, Release)
-cmake -B build -G "Visual Studio 15 2017" -DCMAKE_TOOLCHAIN_FILE=build/generators/conan_toolchain.cmake
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install -y ninja-build
 
-# 构建
-cmake --build build --config Release
-
-# 运行测试
-cd build && ctest -C Release --output-on-failure
-
-# 运行基准测试
-./build/bench/Release/imgproc_bench.exe
+# Fedora
+sudo dnf install -y ninja-build cmake
 ```
 
-### 构建选项
-
-| 选项 | 默认值 | 说明 |
-|------|--------|------|
-| `BUILD_SHARED_LIBS` | OFF | 构建动态库 (DLL) |
-| `BUILD_TESTS` | ON | 构建测试 |
-| `BUILD_BENCHMARKS` | ON | 构建基准测试 |
-| `BUILD_EXAMPLES` | ON | 构建示例 |
-| `USE_WINDOWS_API` | ON | 启用 Windows API 实现 |
-
-### XP 目标平台
-
-使用 v141_xp 工具集：
-```bash
-cmake -B build -G "Visual Studio 15 2017 Win64" -T v141_xp -DCMAKE_TOOLCHAIN_FILE=build/generators/conan_toolchain.cmake
-```
-
-## 使用示例
-
-### 图像格式转换
-
-```cpp
-#include "imgproc/imgproc.hpp"
-
-// 文件转换: PNG/BMP/JPEG → JPEG
-imgproc::convertToJpeg("input.png", "output.jpg", 85, true);  // 使用 Windows API
-imgproc::convertToJpeg("input.bmp", "output.jpg", 85, false); // 使用跨平台
-
-// 内存转换
-std::vector<uint8_t> fileData = /* 读取文件 */;
-std::vector<uint8_t> jpegOut;
-imgproc::convertToJpegFromMemory(fileData.data(), fileData.size(),
-                                  imgproc::ImageType::PNG, jpegOut, 90);
-
-// 使用接口 (更灵活)
-auto codec = imgproc::createCrossCodec();
-imgproc::ImageBuffer img;
-codec->loadFromFile("photo.png", img);
-codec->saveToJpegFile(img, "photo.jpg", 85);
-codec->saveToBmpFile(img, "photo.bmp");
-```
-
-### 二维码读取
-
-```cpp
-#include "imgproc/imgproc.hpp"
-
-// 从文件读取
-auto result = imgproc::readQRCode("qrcode.png");
-if (result.success) {
-    printf("QR Content: %s\n", result.text.c_str());
-    // result.bitmap1bit 包含 1-bit BMP 格式的二维码图像
-}
-
-// 从内存读取
-auto result = imgproc::readQRCodeFromMemory(data, size);
-```
-
-### 文本渲染
-
-```cpp
-#include "imgproc/imgproc.hpp"
-
-imgproc::TextRenderOptions opts;
-opts.text = "Hello World 你好世界";
-opts.fontSize = 32;
-opts.fgColor = 0x000000;  // 黑色
-opts.bgColor = 0xFFFFFF;  // 白色
-opts.antiAlias = true;
-
-// 渲染到文件
-imgproc::renderTextToFile(opts, "output.bmp", true);  // Windows API
-imgproc::renderTextToFile(opts, "output.bmp", false); // 跨平台
-
-// 渲染到内存
-imgproc::ImageBuffer textImg;
-imgproc::renderTextToMemory(opts, textImg, false);
-```
-
-### 压缩
-
-```cpp
-#include "imgproc/imgproc.hpp"
-
-// RLE 压缩
-auto rleResult = imgproc::compressRLE(data, size, width, height, imgproc::PixelFormat::RGB24);
-
-// DeltaRow 压缩
-auto deltaResult = imgproc::compressDeltaRow(data, size, width, height, imgproc::PixelFormat::RGB24);
-
-// JPEG 压缩
-auto jpegResult = imgproc::compressJPEG(data, size, width, height, imgproc::PixelFormat::RGB24, 75);
-
-// 解压
-std::vector<uint8_t> decompressed;
-int w, h;
-imgproc::PixelFormat fmt;
-imgproc::decompressRLE(rleResult.data.data(), rleResult.data.size(), decompressed, w, h, fmt);
-
-// 使用接口
-auto compressor = imgproc::createRLECompression();
-auto result = compressor->compress(data, size, width, height, fmt);
-```
-
-### 命令行工具
+### Build
 
 ```bash
-# 图像转换
-imgproc_demo.exe convert input.png output.jpg 85
+# 1. Install dependencies
+conan install . --output-folder=build --build=missing -s compiler.cppstd=17
 
-# 读取二维码
-imgproc_demo.exe qrcode qrcode.png
+# 2. Configure
+cmake -S . -B build \
+  -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_STANDARD=17 \
+  -G Ninja
 
-# 文本渲染
-imgproc_demo.exe render "Hello World" output.bmp 24
+# 3. Build
+cmake --build build --parallel
 
-# 压缩
-imgproc_demo.exe compress input.bmp output.bin rle
-imgproc_demo.exe compress input.bmp output.bin delta
-imgproc_demo.exe compress input.bmp output.bin jpeg
-
-# 查看图像信息
-imgproc_demo.exe info photo.jpg
+# 4. Test
+ctest --test-dir build --output-on-failure
 ```
 
-## 基准测试
+---
 
-运行综合基准测试：
+## HarmonyOS (OHOS) Build
+
+### Prerequisites
+
+1. **DevEco Studio** (includes OHOS NDK) - see installation below
+2. **Conan 2.x** (`pip install conan`)
+3. **Ninja** (included in OHOS NDK)
+
+### Step 1: Install DevEco Studio
+
+#### Windows
+
+1. **Download**: https://developer.harmonyos.com/cn/develop/deveco-studio
+2. **Install**: Run the installer with default options
+3. **Launch DevEco Studio** and complete initial setup
+4. **Install HarmonyOS SDK**:
+   - Open `File → Settings → SDK`
+   - Select `HarmonyOS` tab
+   - Check `Native` (C/C++ development)
+   - Click `Apply` to download and install
+
+#### macOS
+
+1. **Download**: https://developer.harmonyos.com/cn/develop/deveco-studio
+2. **Install**: Drag DevEco Studio to Applications
+3. **Launch** and complete setup
+4. **Install SDK** via `Preferences → SDK → HarmonyOS → Native`
+
+#### Linux
+
+1. **Download** the Linux version from the same page
+2. **Extract** and run `bin/deveco-studio.sh`
+3. **Install SDK** via settings
+
+### Step 2: Verify NDK Installation
+
+The build script will auto-detect NDK path. To verify:
+
+```powershell
+# PowerShell - check if NDK is found
+.\build.ps1 -OHOS
+# If NDK not found, you'll see installation instructions
+
+# Manual check
+Test-Path "$env:LOCALAPPDATA\Huawei\Sdk\ohos-sdk\native\build\cmake\ohos.toolchain.cmake"
+```
+
+If auto-detection fails, set manually:
+
+```powershell
+# PowerShell (current session)
+$env:OHOS_NDK_HOME = "C:\Program Files\Huawei\Sdk\ohos-sdk\native"
+
+# PowerShell (permanent)
+[Environment]::SetEnvironmentVariable("OHOS_NDK_HOME", "C:\Program Files\Huawei\Sdk\ohos-sdk\native", "User")
+```
 
 ```bash
-./imgproc_bench.exe
+# Bash/Linux/macOS
+export OHOS_NDK_HOME=~/Huawei/Sdk/ohos-sdk/native
 ```
 
-基准测试包含以下模块：
+### Step 3: One-Click Build
 
-1. **图像编解码对比** - Windows API vs 跨平台，不同分辨率 (64x64 ~ 2048x2048)
-2. **压缩算法对比** - RLE / DeltaRow / JPEG (q=50/75/90)
-3. **文本渲染对比** - GDI+ vs FreeType，不同文本长度
-4. **JPEG 质量级别** - q=10 到 q=100 的速度/大小权衡
-5. **压缩场景分析** - 纯色、渐变、随机数据等场景推荐
+```powershell
+# Build with auto-detected NDK path
+.\build.ps1 -OHOS -Clean
 
-### 压缩算法选择指南
+# Specify NDK path explicitly
+.\build.ps1 -OHOS -OHOSNdk "C:\Program Files\Huawei\Sdk\ohos-sdk\native" -Clean
 
-| 场景 | 推荐算法 | 原因 |
-|------|----------|------|
-| 纯色/简单图形 | RLE | 极高压缩比，编解码速度最快 |
-| 渐变/扫描文档 | DeltaRow | 行间差异小，无损压缩效果好 |
-| 照片/复杂图像 | JPEG q=75 | 有损但压缩比高，视觉效果好 |
-| 需要无损 + 复杂图像 | DeltaRow | 无损，对连续变化数据效果好 |
-| 1-bit 黑白图像 | RLE | 行程编码对二值图像效果极佳 |
-| 追求最小体积 | JPEG q=50 | 有损但体积最小 |
-| 追求最高质量 | JPEG q=90+ | 接近无损，体积较大 |
+# Build shared library (.so)
+.\build.ps1 -OHOS -Shared -Clean
 
-## 依赖
+# Verbose output (useful for first build)
+.\build.ps1 -OHOS -Clean -Verbose
+```
 
-| 库 | 版本 | 用途 | 许可证 |
-|----|------|------|--------|
-| libpng | 1.6.40 | PNG 读写 | zlib |
-| libjpeg-turbo | 2.1.5 | JPEG 编解码 | BSD |
-| zxing-cpp | 2.1.0 | 二维码解码 | Apache 2.0 |
-| freetype | 2.13.0 | 文本渲染 | FTL/GPL |
+### Step 4: Manual Build
 
-## 许可证
+```powershell
+# 1. Install dependencies via Conan (cross-compile with OHOS profile)
+conan install . --output-folder=build --profile profiles/ohos-arm64 --build=missing
+
+# 2. Configure (uses Conan-generated toolchain)
+cmake -S . -B build \
+  -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_STANDARD=17 \
+  -DUSE_WINDOWS_API=OFF \
+  -DBUILD_TESTS=OFF \
+  -DBUILD_BENCHMARKS=OFF \
+  -DBUILD_EXAMPLES=OFF
+
+# 3. Build
+cmake --build build --parallel
+```
+
+### Build Output
+
+```
+build/
+├── libimgproc_lib.a    # Static library
+├── libimgproc_lib.so   # Shared library (if -Shared)
+└── include/            # Public headers (for integration)
+```
+
+### Integrate into DevEco Studio
+
+1. Copy `build/libimgproc_lib.so` to your project's `libs/<abi>/` directory
+2. Copy `include/imgproc/` to your project's `include/` directory
+3. In `CMakeLists.txt`:
+   ```cmake
+   target_link_libraries(entry SHARED imgproc_lib)
+   target_include_directories(entry PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+   ```
+4. Use the C API from NAPI/ArkTS layer (see `include/imgproc/imgproc_c_api.h`)
+
+### OHOS Conan Profile
+
+The file `profiles/ohos-arm64` defines:
+
+```ini
+[settings]
+os=OHOS
+arch=arm64
+compiler=clang
+compiler.cppstd=17
+
+[buildenv]
+CC=$OHOS_NDK_HOME/llvm/bin/clang
+CXX=$OHOS_NDK_HOME/llvm/bin/clang++
+```
+
+---
+
+## CMake Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `BUILD_SHARED_LIBS` | OFF | Build shared library (.dll/.so) |
+| `BUILD_TESTS` | ON | Build unit tests |
+| `BUILD_BENCHMARKS` | ON | Build benchmarks |
+| `BUILD_EXAMPLES` | ON | Build example CLI tool |
+| `BUILD_LUA_BINDINGS` | OFF | Build Lua bindings |
+| `USE_WINDOWS_API` | ON (Windows) / OFF (others) | Enable Windows GDI+ implementation |
+
+---
+
+## Dependencies
+
+| Library | Version | Purpose | License |
+|---------|---------|---------|---------|
+| libpng | 1.6.38 | PNG read/write | zlib |
+| libjpeg-turbo | 2.1.5 | JPEG encode/decode | BSD |
+| zxing-cpp | 2.1.0 | QR/barcode decode | Apache 2.0 |
+| freetype | 2.13.0 | Text rendering | FTL/GPL |
+| zint | 2.10.0 | Barcode generation | GPL |
+| lua | 5.4.4 | Scripting (optional) | MIT |
+
+All dependencies are managed by Conan. First build downloads and compiles them automatically.
+
+---
+
+## License
 
 MIT License

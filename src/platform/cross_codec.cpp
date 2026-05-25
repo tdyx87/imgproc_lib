@@ -800,22 +800,32 @@ bool CrossTextRenderer::renderToMemory(const TextRenderOptions& opts, ImageBuffe
     }
 
     if (!fontLoaded) {
-        // 尝试使用系统字体
+        // Try system fonts
 #ifdef _WIN32
         const char* systemFonts[] = {
-            "C:\\Windows\\Fonts\\simhei.ttf",    // 黑体 (首选, 支持中文)
-            "C:\\Windows\\Fonts\\msyh.ttc",      // 微软雅黑
-            "C:\\Windows\\Fonts\\simsun.ttc",     // 宋体
-            "C:\\Windows\\Fonts\\arial.ttf",      // Arial
+            "C:\\Windows\\Fonts\\simhei.ttf",    // SimHei (Chinese)
+            "C:\\Windows\\Fonts\\msyh.ttc",      // Microsoft YaHei
+            "C:\\Windows\\Fonts\\simsun.ttc",    // SimSun
+            "C:\\Windows\\Fonts\\arial.ttf",     // Arial
             nullptr
         };
-#elif __linux__
+#elif defined(OHOS)
+        // HarmonyOS system fonts
+        const char* systemFonts[] = {
+            "/system/fonts/DroidSansFallback.ttf",  // HarmonyOS default (supports CJK)
+            "/system/fonts/DroidSans.ttf",
+            "/system/fonts/NotoSansCJK-Regular.ttf",
+            "/system/fonts/HarmonyOS_Sans.ttf",
+            nullptr
+        };
+#elif defined(__linux__)
         const char* systemFonts[] = {
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
             nullptr
         };
 #else
+        // macOS
         const char* systemFonts[] = {
             "/System/Library/Fonts/Helvetica.ttc",
             "/System/Library/Fonts/SFNSMono.ttf",

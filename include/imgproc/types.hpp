@@ -166,11 +166,16 @@ public:
 };
 
 // Factory functions
+// Windows-specific (only available on Windows platform)
+#ifdef _WIN32
 IMGPROC_API std::unique_ptr<IImageCodec> createWinCodec();
+IMGPROC_API std::unique_ptr<ITextRenderer> createWinTextRenderer();
+#endif
+
+// Cross-platform (available on all platforms including HarmonyOS)
 IMGPROC_API std::unique_ptr<IImageCodec> createCrossCodec();
 IMGPROC_API std::unique_ptr<IQRCodeReader> createQRCodeReader();
 IMGPROC_API std::unique_ptr<IQRCodeGenerator> createQRCodeGenerator();
-IMGPROC_API std::unique_ptr<ITextRenderer> createWinTextRenderer();
 IMGPROC_API std::unique_ptr<ITextRenderer> createCrossTextRenderer();
 IMGPROC_API std::unique_ptr<ICompression> createRLECompression();
 IMGPROC_API std::unique_ptr<ICompression> createDeltaRowCompression();

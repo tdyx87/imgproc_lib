@@ -1,0 +1,28 @@
+# Conan profile for HarmonyOS (OHOS) cross-compilation
+# Usage: conan install . --profile profiles/ohos-arm64 --build=missing
+
+[settings]
+os=OHOS
+arch=arm64
+compiler=clang
+compiler.version=14
+compiler.libcxx=c++
+compiler.cppstd=17
+build_type=Release
+
+[conf]
+# Tell Conan tools to use the OHOS NDK toolchain
+tools.cmake.cmaketoolchain:generator=Ninja
+tools.cmake.cmaketoolchain:user_toolchain=["-DOHOS_NDK_HOME=$ENV{OHOS_NDK_HOME}"]
+
+[buildenv]
+# Point to OHOS NDK compilers
+CC=$OHOS_NDK_HOME/llvm/bin/clang
+CXX=$OHOS_NDK_HOME/llvm/bin/clang++
+AR=$OHOS_NDK_HOME/llvm/bin/llvm-ar
+RANLIB=$OHOS_NDK_HOME/llvm/bin/llvm-ranlib
+STRIP=$OHOS_NDK_HOME/llvm/bin/llvm-strip
+NM=$OHOS_NDK_HOME/llvm/bin/llvm-nm
+
+[env]
+OHOS_NDK_HOME=
